@@ -1,0 +1,16 @@
+# Maven artifacts
+target/
+pom.xml.tag
+pom.xml.versions
+pom.xml.bak
+dependency-reduced-pom.xml
+
+# Logs
+*.log
+
+# IDE files (IntelliJ IDEA)
+.idea/
+*.iml
+
+# OS generated files
+.DS_Store
