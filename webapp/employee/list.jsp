@@ -14,9 +14,7 @@
 
     <div class="header-nav-bar">
         <h1>员工列表 (${listEmployee.size()} 人)</h1>
-        <a href="<c:url value='/DashboardServlet'/>" class="btn-secondary" style="margin-left: 10px;">
-            返回主页
-        </a>
+        <a href="<c:url value='/DashboardServlet'/>" class="btn-secondary" style="margin-left: 10px;">返回主页</a>
     </div>
 
     <div class="toolbar">
