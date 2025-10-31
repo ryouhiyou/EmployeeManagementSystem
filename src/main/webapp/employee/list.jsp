@@ -1,6 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -57,14 +58,63 @@
             align-items: center;
             margin-bottom: 20px;
         }
+
+        /* 排序表头样式 */
+        .sortable-header {
+            cursor: pointer;
+            position: relative;
+        }
+        .sort-indicator {
+            margin-left: 5px;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        .sort-indicator.asc {
+            /* 向上箭头 */
+            transform: rotate(180deg);
+        }
+        .sort-indicator.desc {
+            /* 向下箭头 */
+            transform: rotate(0deg);
+        }
     </style>
+    <script>
+        /**
+         * 生成新的排序链接，同时保留搜索关键词和当前页状态（虽然通常会重置到第一页）
+         */
+        function getSortLink(columnName) {
+            // 获取当前的排序字段和方向
+            const currentSortBy = '${requestScope.sortBy}';
+            const currentSortOrder = '${requestScope.sortOrder}';
+
+            let newSortOrder = 'ASC'; // 默认升序
+
+            // 如果点击的是当前正在排序的列，则反转方向
+            if (currentSortBy === columnName) {
+                newSortOrder = (currentSortOrder === 'ASC' ? 'DESC' : 'ASC');
+            }
+
+            // 构建新的 URL
+            const searchParam = '${requestScope.searchKeyword}';
+            let url = "<c:url value='/EmployeeServlet?action=list'/>";
+            url += "&sortBy=" + columnName + "&sortOrder=" + newSortOrder;
+
+            if (searchParam) {
+                url += "&search=" + encodeURIComponent(searchParam);
+            }
+
+            // 排序后通常回到第 1 页
+            url += "&page=1";
+
+            return url;
+        }
+    </script>
 </head>
 <body>
 
 <div class="content-container">
 
     <div class="header-nav-bar">
-        <%-- 总记录数现在从 Servlet 设置的 totalRecords 属性中获取 --%>
         <h1>员工列表 (${requestScope.totalRecords} 人)</h1>
         <a href="<c:url value='/DashboardServlet'/>" class="btn-secondary" style="margin-left: 10px;">
             返回主页
@@ -76,7 +126,7 @@
 
         <form action="<c:url value='/EmployeeServlet'/>" method="get" class="search-form">
             <input type="hidden" name="action" value="list">
-            <input type="text" name="search" placeholder="按姓名或部门搜索..."
+            <input type="text" name="search" placeholder="按姓名、部门、职位搜索..."
                    value="${requestScope.searchKeyword}" autocomplete="off">
             <button type="submit">搜索</button>
         </form>
@@ -94,17 +144,50 @@
     <table class="data-table">
         <thead>
         <tr>
-            <th>ID</th>
-            <th>姓名</th>
-            <th>部门</th>
-            <th>职位</th>
-            <th>薪资</th>
-            <th>入职日期</th>
+            <%-- 排序表头 ID --%>
+            <th onclick="window.location.href=getSortLink('id')" class="sortable-header">
+                ID
+                <c:if test="${requestScope.sortBy eq 'id'}">
+                    <span class="sort-indicator ${requestScope.sortOrder eq 'ASC' ? 'asc' : 'desc'}">▼</span>
+                </c:if>
+            </th>
+            <%-- 排序表头 姓名 --%>
+            <th onclick="window.location.href=getSortLink('name')" class="sortable-header">
+                姓名
+                <c:if test="${requestScope.sortBy eq 'name'}">
+                    <span class="sort-indicator ${requestScope.sortOrder eq 'ASC' ? 'asc' : 'desc'}">▼</span>
+                </c:if>
+            </th>
+            <th onclick="window.location.href=getSortLink('department')" class="sortable-header">
+                部门
+                <c:if test="${requestScope.sortBy eq 'department'}">
+                    <span class="sort-indicator ${requestScope.sortOrder eq 'ASC' ? 'asc' : 'desc'}">▼</span>
+                </c:if>
+            </th>
+            <th onclick="window.location.href=getSortLink('position')" class="sortable-header">
+                职位
+                <c:if test="${requestScope.sortBy eq 'position'}">
+                    <span class="sort-indicator ${requestScope.sortOrder eq 'ASC' ? 'asc' : 'desc'}">▼</span>
+                </c:if>
+            </th>
+            <%-- 排序表头 薪资 --%>
+            <th onclick="window.location.href=getSortLink('salary')" class="sortable-header">
+                薪资
+                <c:if test="${requestScope.sortBy eq 'salary'}">
+                    <span class="sort-indicator ${requestScope.sortOrder eq 'ASC' ? 'asc' : 'desc'}">▼</span>
+                </c:if>
+            </th>
+            <%-- 排序表头 入职日期 --%>
+            <th onclick="window.location.href=getSortLink('hire_date')" class="sortable-header">
+                入职日期
+                <c:if test="${requestScope.sortBy eq 'hire_date'}">
+                    <span class="sort-indicator ${requestScope.sortOrder eq 'ASC' ? 'asc' : 'desc'}">▼</span>
+                </c:if>
+            </th>
             <th>操作</th>
         </tr>
         </thead>
         <tbody>
-        <%-- 循环遍历当前页的员工列表 --%>
         <c:forEach var="employee" items="${requestScope.listEmployee}">
             <tr>
                 <td>${employee.id}</td>
@@ -129,11 +212,16 @@
 
     <c:if test="${requestScope.totalPages > 1}">
         <div class="pagination">
-                <%-- 定义基础链接，包含 action 和搜索关键字（如果存在） --%>
+                <%-- 定义基础链接，包含 action、搜索关键字、排序字段和方向 --%>
             <c:url var="baseLink" value="/EmployeeServlet">
                 <c:param name="action" value="list"/>
                 <c:if test="${not empty requestScope.searchKeyword}">
                     <c:param name="search" value="${requestScope.searchKeyword}"/>
+                </c:if>
+                <%-- 关键：分页时保留当前的排序参数 --%>
+                <c:if test="${not empty requestScope.sortBy}">
+                    <c:param name="sortBy" value="${requestScope.sortBy}"/>
+                    <c:param name="sortOrder" value="${requestScope.sortOrder}"/>
                 </c:if>
             </c:url>
 

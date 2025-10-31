@@ -20,7 +20,7 @@ import java.util.List;
 
 @WebServlet("/EmployeeServlet/*")
 public class EmployeeServlet extends HttpServlet {
-    private static final int RECORDS_PER_PAGE = 10; // 每页显示记录数
+    private static final int RECORDS_PER_PAGE = 10;
     private EmployeeDAO employeeDAO;
 
     public void init() {
@@ -76,26 +76,43 @@ public class EmployeeServlet extends HttpServlet {
     // ---------------------- 核心业务方法 ----------------------
 
     /**
-     * 查找和分页功能的核心方法
+     * 查找、分页和排序功能的核心方法
      */
     private void listEmployee(HttpServletRequest request, HttpServletResponse response)
             throws IOException, ServletException {
 
-        // 1. 获取分页和搜索参数
+        // 1. 获取分页、搜索和排序参数
         int currentPage = 1;
-        // 确保从请求中获取的 String 参数被正确转换为 int
         if (request.getParameter("page") != null) {
             try {
                 currentPage = Integer.parseInt(request.getParameter("page"));
-            } catch (NumberFormatException ignored) {
-                // 如果 page 不是数字，保持默认值 1
-            }
+            } catch (NumberFormatException ignored) { }
         }
+
         String searchKeyword = request.getParameter("search");
-        // 确保 searchKeyword 在 DAO 调用中不会为 null
         if (searchKeyword == null) {
             searchKeyword = "";
         }
+
+        // 获取排序参数
+        String sortBy = request.getParameter("sortBy");
+        String sortOrder = request.getParameter("sortOrder");
+
+        // 默认排序：按 ID 降序
+        if (sortBy == null || sortBy.isEmpty()) {
+            sortBy = "id";
+            sortOrder = "DESC";
+        }
+        // 安全检查：只能是 ASC 或 DESC
+        if (sortOrder == null || (!sortOrder.equalsIgnoreCase("ASC") && !sortOrder.equalsIgnoreCase("DESC"))) {
+            sortOrder = "DESC";
+        }
+
+        // 检查 sortBy 是否是有效字段，防止意外的 SQL 注入
+        if (!isValidSortColumn(sortBy)) {
+            sortBy = "id";
+        }
+
 
         int offset = (currentPage - 1) * RECORDS_PER_PAGE;
         int limit = RECORDS_PER_PAGE;
@@ -107,15 +124,14 @@ public class EmployeeServlet extends HttpServlet {
         try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
             employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
 
-            // 2a. 获取总记录数 (用于分页计算)
             totalRecords = employeeDAO.getTotalRecords(searchKeyword);
 
-            // 2b. 获取当前页的员工列表
-            // 🚀 关键修复：修正参数顺序为 (int offset, int limit, String searchKeyword)
-            listEmployee = employeeDAO.listAllEmployees(offset, limit, searchKeyword);
+            // 🚀 关键：传递全部 5 个参数 (offset, limit, search, sortBy, sortOrder)
+            listEmployee = employeeDAO.listAllEmployees(offset, limit, searchKeyword, sortBy, sortOrder);
 
         } catch (Exception e) {
             e.printStackTrace();
+            // 重新包装异常，提供更清晰的日志信息
             throw new ServletException("Error listing employees with MyBatis.", e);
         }
 
@@ -126,11 +142,28 @@ public class EmployeeServlet extends HttpServlet {
         request.setAttribute("currentPage", currentPage);
         request.setAttribute("totalPages", totalPages);
         request.setAttribute("totalRecords", totalRecords);
-        request.setAttribute("searchKeyword", searchKeyword); // 传回搜索关键字，用于 JPS 表单回显
+        request.setAttribute("searchKeyword", searchKeyword);
+
+        // 新增：将当前的排序参数传回 JSP
+        request.setAttribute("sortBy", sortBy);
+        request.setAttribute("sortOrder", sortOrder);
 
         RequestDispatcher dispatcher = request.getRequestDispatcher("/employee/list.jsp");
         dispatcher.forward(request, response);
     }
+
+    /**
+     * 安全检查：只允许特定的列名进行排序
+     */
+    private boolean isValidSortColumn(String column) {
+        return column.equalsIgnoreCase("id") ||
+                column.equalsIgnoreCase("name") ||
+                column.equalsIgnoreCase("department") ||
+                column.equalsIgnoreCase("position") ||
+                column.equalsIgnoreCase("salary") ||
+                column.equalsIgnoreCase("hire_date");
+    }
+
 
     // ---------------------- CRUD/辅助方法 ----------------------
 
@@ -144,7 +177,8 @@ public class EmployeeServlet extends HttpServlet {
             throws IOException {
         Employee newEmployee = extractEmployeeFromRequest(request);
 
-        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(true)) { // 开启自动提交
+        // 使用 try-with-resources 确保 SqlSession 关闭，openSession(true) 开启自动提交
+        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(true)) {
             employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
             employeeDAO.insertEmployee(newEmployee);
         } catch (Exception e) {
@@ -183,7 +217,7 @@ public class EmployeeServlet extends HttpServlet {
     private void updateEmployee(HttpServletRequest request, HttpServletResponse response)
             throws IOException {
         Employee employee = extractEmployeeFromRequest(request);
-        employee.setId(Integer.parseInt(request.getParameter("id"))); // 确保ID被设置
+        employee.setId(Integer.parseInt(request.getParameter("id")));
 
         try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(true)) {
             employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
@@ -210,7 +244,6 @@ public class EmployeeServlet extends HttpServlet {
     }
 
     private Employee extractEmployeeFromRequest(HttpServletRequest request) {
-        // 从请求中获取并转换数据
         String name = request.getParameter("name");
         String department = request.getParameter("department");
         String position = request.getParameter("position");
@@ -218,30 +251,21 @@ public class EmployeeServlet extends HttpServlet {
         // 处理薪资：如果为空或无效，设置为 0.00
         BigDecimal salary = BigDecimal.ZERO;
         try {
-            // 确保处理 null 或空字符串
             String salaryStr = request.getParameter("salary");
             if (salaryStr != null && !salaryStr.isEmpty()) {
                 salary = new BigDecimal(salaryStr);
             }
-        } catch (Exception ignored) {
-            // 忽略转换错误，保持为 ZERO
-        }
+        } catch (Exception ignored) { }
 
         // 处理入职日期
         java.sql.Date sqlHireDate = null;
-
         try {
             String dateString = request.getParameter("hireDate");
             if (dateString != null && !dateString.isEmpty()) {
-                // 1. 将字符串解析为 java.util.Date
                 java.util.Date utilHireDate = new SimpleDateFormat("yyyy-MM-dd").parse(dateString);
-
-                // 2. 将 java.util.Date 转换为 java.sql.Date
                 sqlHireDate = new java.sql.Date(utilHireDate.getTime());
             }
-        } catch (ParseException e) {
-            // 忽略解析错误
-        }
+        } catch (ParseException e) { }
 
         Employee employee = new Employee();
         employee.setName(name);
