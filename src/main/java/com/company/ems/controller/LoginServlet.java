@@ -1,62 +1,87 @@
 package com.company.ems.controller;
 
 import com.company.ems.dao.UserDAO;
-import com.company.ems.dao.UserDAOImpl;
 import com.company.ems.model.User;
-import java.io.IOException;
-import java.sql.SQLException;
+import com.company.ems.util.MyBatisUtil; // Import MyBatis utility class
+
 import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet; // 引入注解
+import jakarta.servlet.annotation.WebServlet; // Import annotation
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-// 使用 @WebServlet 注解进行注册和映射
+import java.io.IOException;
+import java.sql.SQLException;
+
+import org.apache.ibatis.session.SqlSession; // Import SqlSession
+
+// Register and map using @WebServlet annotation
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-    private UserDAO userDAO;
 
-    @Override
-    public void init() throws ServletException {
-        userDAO = new UserDAOImpl();
-    }
+    // The dependency on the UserDAO member variable and init() method has been removed
 
-    // 处理 GET 请求：显示登录表单 (解决 405 错误)
+    // Handle GET requests: display the login form (resolves 405 error)
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-
         request.getRequestDispatcher("/login.jsp").forward(request, response);
     }
 
-    // 处理 POST 请求：验证登录信息
+    // Handle POST requests: validate login information
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        // ... (登录逻辑与之前保持一致)
         request.setCharacterEncoding("UTF-8");
         String username = request.getParameter("username");
         String password = request.getParameter("password");
 
-        try {
+        User loggedInUser = null;
+        String errorMessage = null;
+
+        // Use try-with-resources to ensure SqlSession is closed
+        try (SqlSession session = MyBatisUtil.getSqlSessionFactory().openSession()) {
+
+            // Get UserDAO Mapper instance
+            UserDAO userDAO = session.getMapper(UserDAO.class);
+
+            // 1. Find user by username
             User user = userDAO.findByUsername(username);
 
-            if (user != null && user.getPassword().equals(password)) {
-                HttpSession session = request.getSession();
-                session.setAttribute("user", user);
-                session.setMaxInactiveInterval(30 * 60);
-
-                response.sendRedirect(request.getContextPath() + "/DashboardServlet");
-            } else {
-                request.setAttribute("error", "用户名或密码错误。");
-                request.getRequestDispatcher("/login.jsp").forward(request, response);
+            if (user == null) {
+                errorMessage = "用户名或密码错误。";
             }
+            // 2. Validate password
+            else if (user.getPassword().equals(password)) {
+                loggedInUser = user;
+                // role check has been removed
+            } else {
+                errorMessage = "用户名或密码错误。";
+            }
+
         } catch (SQLException e) {
             e.printStackTrace();
-            request.setAttribute("error", "系统错误，请稍后再试。");
+            errorMessage = "系统错误，登录失败：" + e.getMessage();
+        } catch (Exception e) {
+            e.printStackTrace();
+            errorMessage = "系统错误，登录失败。";
+        }
+
+
+        if (loggedInUser != null) {
+            // Login successful
+            HttpSession session = request.getSession();
+            session.setAttribute("user", loggedInUser);
+            session.setMaxInactiveInterval(30 * 60);
+
+            // *** 重定向到 DashboardServlet 作为仪表盘/主页 ***
+            response.sendRedirect(request.getContextPath() + "/DashboardServlet");
+        } else {
+            // Login failed, forward back to the login page with the error message
+            request.setAttribute("error", errorMessage);
             request.getRequestDispatcher("/login.jsp").forward(request, response);
         }
     }

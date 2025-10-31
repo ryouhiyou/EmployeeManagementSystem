@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 确保这里的 namespace 与 UserDAO 接口的完整路径一致 -->
+<mapper namespace="com.company.ems.dao.UserDAO">
+
+    <!-- findByUsername: 用于登录或注册校验用户名是否已存在 -->
+    <select id="findByUsername" parameterType="string" resultType="com.company.ems.model.User">
+        <!-- 注意：SELECT 语句中移除了 role 字段 -->
+        SELECT id, username, password, email, created_at
+        FROM users
+        WHERE username = #{username}
+    </select>
+
+    <!-- findByEmail: 用于注册校验邮箱是否已被使用 -->
+    <select id="findByEmail" parameterType="string" resultType="com.company.ems.model.User">
+        <!-- 注意：SELECT 语句中移除了 role 字段 -->
+        SELECT id, username, password, email, created_at
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <!-- addUser: 用于用户注册 -->
+    <insert id="addUser" parameterType="com.company.ems.model.User" useGeneratedKeys="true" keyProperty="id">
+        <!-- 注意：INSERT 语句中移除了 role 字段和值 -->
+        INSERT INTO users (username, password, email)
+        VALUES (#{username}, #{password}, #{email})
+    </insert>
+
+</mapper>

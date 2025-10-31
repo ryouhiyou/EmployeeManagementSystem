@@ -4,11 +4,33 @@
 <head>
     <meta charset="UTF-8">
     <title>员工管理系统 - 登录</title>
-    <!-- 使用新的统一 CSS 路径 -->
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* 局部样式：确保链接样式与主色调一致 */
+        .text-link {
+            color: var(--primary-blue, #2563eb); /* 默认使用您外部 CSS 中的主蓝色 */
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+        .text-link:hover {
+            text-decoration: underline;
+        }
+        .test-accounts {
+            margin-top: 1.5rem;
+            color: var(--font-sub, #9ca3af);
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        .test-accounts strong {
+            color: var(--font-main, #1f2937);
+            font-weight: 500;
+            display: block; /* 确保账号信息单独成行 */
+            margin-top: 0.2rem;
+        }
+    </style>
 </head>
 <body>
-<!-- 使用 login-container 样式，保持简洁居中 -->
 <div class="login-container">
     <h2>员工信息管理系统</h2>
     <form action="LoginServlet" method="post">
@@ -25,11 +47,18 @@
             <label for="password">密码:</label>
             <input type="password" id="password" name="password" required>
         </div>
-        <!-- 登录按钮使用 btn-login 样式 -->
         <button type="submit" class="btn-login">登录</button>
-        <p>测试账号：admin / admin123</p>
-        <p>manager / manager123</p>
     </form>
+
+    <p style="margin-top: 1.5rem;">
+        还没有账号？<a href="register.jsp" class="text-link">立即注册</a>
+    </p>
+
+    <div class="test-accounts">
+        测试账号：
+        <strong>admin / admin123</strong>
+        <strong>manager / manager123</strong>
+    </div>
 </div>
 </body>
 </html>
