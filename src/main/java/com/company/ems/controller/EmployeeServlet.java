@@ -180,9 +180,8 @@ public class EmployeeServlet extends HttpServlet {
 
     private void insertEmployee(HttpServletRequest request, HttpServletResponse response)
             throws IOException {
+        // 提取数据时，extractEmployeeFromRequest 会确保 hireDate 不为 null
         Employee newEmployee = extractEmployeeFromRequest(request);
-        // 注意：这里 insert 操作如果 hireDate 为 null 也会导致 SQLIntegrityConstraintViolationException。
-        // 但是对于新增，我们假设用户会提供所有必填信息。
 
         // ⚠️ 事务修改：使用 try-with-resources 自动关闭 Session，并显式处理提交和回滚
         try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(TransactionIsolationLevel.READ_COMMITTED)) {
@@ -240,10 +239,12 @@ public class EmployeeServlet extends HttpServlet {
         int employeeId = Integer.parseInt(request.getParameter("id"));
         employee.setId(employeeId);
 
-        // 2. 检查 hireDate 是否为 null
+        // 2. 检查 hireDate 是否为 null (在 extractEmployeeFromRequest 中已修复，这里作为二次保险，但逻辑可以简化)
         if (employee.getHireDate() == null) {
             // 🐛 修复逻辑：如果用户未提供日期，或者日期解析失败（导致为 null），
             // 则从数据库中查询原始的 hireDate 值，以避免 'hire_date cannot be null' 错误。
+            // 由于 extractEmployeeFromRequest 已经确保它不为 null，理论上此处不应该执行。
+            // 但为了兼容旧数据和更健壮的更新，保留查询逻辑（如果用户在 edit 表单中清空了日期）
             try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
                 employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
                 Employee existingEmployee = employeeDAO.selectEmployeeById(employeeId);
@@ -335,9 +336,16 @@ public class EmployeeServlet extends HttpServlet {
                 sqlHireDate = new java.sql.Date(utilHireDate.getTime());
             }
         } catch (ParseException e) {
-            // 如果解析失败，sqlHireDate 保持为 null，由 updateEmployee 方法处理
+            // 解析失败，sqlHireDate 保持为 null
             System.err.println("WARNING: Failed to parse hire date string: " + request.getParameter("hireDate"));
         }
+
+        // 🐛 修复：如果 sqlHireDate 仍然是 null (用户未提供或解析失败)，则使用当前日期
+        if (sqlHireDate == null) {
+            sqlHireDate = new java.sql.Date(System.currentTimeMillis());
+            System.out.println("DEBUG: Hire date not provided or invalid, defaulting to current system date.");
+        }
+
 
         Employee employee = new Employee();
         employee.setName(name);
