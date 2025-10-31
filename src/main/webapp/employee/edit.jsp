@@ -6,6 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <title>编辑员工</title>
+    <!-- 使用新的统一 CSS 路径 -->
     <link rel="stylesheet" href="<c:url value='/css/style.css'/>">
 </head>
 <body>
@@ -13,6 +14,7 @@
 
 <div class="content-container form-page">
     <h1>编辑员工信息 - ${emp.name}</h1>
+    <!-- 表单使用 data-form 居中且约束宽度 -->
     <form action="<c:url value='/EmployeeServlet?action=update'/>" method="post" class="data-form">
         <input type="hidden" name="id" value="${emp.id}">
 
@@ -48,7 +50,9 @@
         </div>
 
         <div class="form-actions">
+            <!-- 提交使用 btn-primary 蓝色 -->
             <button type="submit" class="btn-primary">保存修改</button>
+            <!-- 取消使用 btn-secondary 灰色 -->
             <a href="<c:url value='/EmployeeServlet?action=list'/>" class="btn-secondary">取消</a>
         </div>
     </form>

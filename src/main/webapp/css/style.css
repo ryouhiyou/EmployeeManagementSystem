@@ -1,170 +1,289 @@
-/* 通用样式 */
+/* -------------------------------------------------------------------
+ * 核心样式定义 - 极简扁平风 (Clean Flat Style)
+ * ------------------------------------------------------------------- */
+
+/* 1. 根变量和基础设置 */
+:root {
+    /* 主色调：柔和的青蓝色 (用于按钮、链接、焦点、AI回复边框) */
+    --primary-blue: #2563eb; /* 更亮、更现代的蓝色 */
+    /* 辅助成功色：柔和的绿色 */
+    --success-green: #10b981;
+    /* 辅助次要色：中性灰（用于返回/取消） */
+    --secondary-gray: #6b7280;
+    /* 警告/删除色 */
+    --delete-red: #ef4444;
+
+    /* 背景和边框 */
+    --light-bg: #f5f5f5; /* 页面背景 - 极浅灰 (比 f9fafb 稍微深一点，更接近截图) */
+    --card-bg: #ffffff; /* 卡片背景 - 纯白 */
+    --border-color: #e5e7eb; /* 柔和边框 - Gray 200 */
+    /* 调整阴影，使其更明显和柔和，符合截图风格 */
+    --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.08); /* 使用更柔和且分散的阴影 */
+
+    /* 文本颜色 */
+    --font-main: #1f2937; /* 主文本色 - 深沉黑灰 */
+    --font-sub: #9ca3af; /* 辅助文本色 - 浅灰 (用于提示文字/占位符) */
+
+    /* 间距 */
+    --spacing-base: 1rem;
+}
+
 body {
-    font-family: Arial, sans-serif;
+    font-family: 'Inter', 'Microsoft YaHei', sans-serif;
+    /* 确保 body 使用极浅灰背景 */
+    background-color: var(--light-bg);
+    color: var(--font-main);
+    line-height: 1.6;
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
-    color: #333;
 }
-.content-container {
-    width: 80%;
-    margin: 20px auto;
-    background: #fff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-}
+
 h1 {
-    border-bottom: 2px solid #eee;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--font-main);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
 }
 
-/* 按钮样式 */
-.btn-primary, .btn-success, .btn-secondary, .btn-logout, .link-danger {
-    display: inline-block;
-    padding: 8px 15px;
-    margin: 5px 2px;
-    border-radius: 4px;
-    text-decoration: none;
-    font-size: 14px;
-    cursor: pointer;
-    border: none;
-    text-align: center;
-}
-.btn-primary {
-    background-color: #007bff;
-    color: white;
-}
-.btn-success {
-    background-color: #28a745;
-    color: white;
-}
-.btn-secondary {
-    background-color: #6c757d;
-    color: white;
-}
-.btn-logout {
-    background-color: #dc3545;
-    color: white;
-}
-.link-danger {
-    color: #dc3545;
-    text-decoration: underline;
+/* 2. 页面布局容器 */
+.content-container {
+    width: 96%;
+    max-width: 1200px;
+    margin: 3rem auto;
+    padding: 2.5rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--card-shadow);
 }
 
-/* 头部导航栏 */
+/* 3. 页眉和导航 */
 .main-header {
-    background-color: #343a40;
-    color: white;
-    padding: 15px 10%;
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 3%; /* 保持与内容容器的边距对齐 */
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-.main-header .logo {
-    font-size: 24px;
-    font-weight: bold;
-}
-.main-nav a {
-    color: white;
-    text-decoration: none;
-    margin-left: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* 登录和表单 */
-.login-container {
-    width: 350px;
-    margin: 100px auto;
-    padding: 30px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
-    text-align: center;
+.main-header .logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-blue);
 }
+
+.main-nav a {
+    text-decoration: none;
+    color: var(--font-sub);
+    font-weight: 500;
+    margin-left: 1.5rem;
+    padding: 0.5rem 0;
+    transition: color 0.2s, border-bottom 0.2s;
+    border-bottom: 2px solid transparent;
+}
+
+.main-nav a:hover,
+.main-nav a.active {
+    color: var(--primary-blue);
+    border-bottom: 2px solid var(--primary-blue);
+}
+
+.main-nav .btn-logout {
+    background-color: transparent;
+    color: var(--delete-red);
+    border: 1px solid var(--delete-red);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    margin-left: 1.5rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.main-nav .btn-logout:hover {
+    background-color: var(--delete-red);
+    color: var(--card-bg);
+    border-color: var(--delete-red);
+}
+
+
+/* 4. 表单元素 (适用于 new.jsp, edit.jsp, login.jsp) */
+.data-form, .login-container {
+    max-width: 500px; /* 限制表单宽度，使其在页面中央更美观 */
+    margin: 0 auto;
+}
+
 .form-group {
-    margin-bottom: 15px;
-    text-align: left;
+    margin-bottom: var(--spacing-base);
 }
+
 .form-group label {
     display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
+    font-weight: 500;
+    color: var(--font-main);
+    margin-bottom: 0.4rem;
+    font-size: 0.95rem;
 }
-.form-group input, .data-form input {
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group input[type="email"],
+.form-group input[type="date"],
+.form-group input[type="password"],
+textarea {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 0.6rem 0.8rem;
     box-sizing: border-box;
-}
-.error-message {
-    color: #dc3545;
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-}
-.success-message {
-    color: #155724;
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    color: var(--font-main);
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-/* 数据表格 */
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-}
-.data-table th, .data-table td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-}
-.data-table th {
-    background-color: #f2f2f2;
-    font-weight: bold;
-}
-.action-links a {
-    margin-right: 5px;
+.form-group input:focus,
+textarea:focus {
+    border-color: var(--primary-blue);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
-/* 详情表格 */
+.form-actions {
+    margin-top: 2rem;
+    display: flex;
+    gap: var(--spacing-base);
+    justify-content: flex-start; /* 表单操作靠左对齐 */
+}
+
+/* 5. 通用按钮样式 */
+.btn-primary, .btn-secondary, .btn-success, .btn-login, .btn-logout, .btn-danger {
+    padding: 0.6rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+/* 主操作按钮 (Primary - 保存修改/编辑) */
+.btn-primary {
+    background-color: var(--primary-blue);
+    color: var(--card-bg);
+}
+.btn-primary:hover {
+    background-color: #1d4ed8; /* Darker blue */
+}
+
+/* 成功操作按钮 (Success - 新增表单的保存) */
+.btn-success {
+    background-color: var(--success-green);
+    color: var(--card-bg);
+}
+.btn-success:hover {
+    background-color: #059669; /* Darker green */
+}
+
+/* 次要操作按钮 (Secondary - 返回/取消) */
+.btn-secondary {
+    background-color: var(--border-color);
+    color: var(--font-main);
+}
+.btn-secondary:hover {
+    background-color: #d1d5db; /* Gray 300 */
+}
+
+/* 登录按钮 */
+.btn-login {
+    width: 100%; /* 登录页面的按钮全宽 */
+    background-color: var(--primary-blue);
+    color: var(--card-bg);
+    margin-top: 1rem;
+}
+.btn-login:hover {
+    background-color: #1d4ed8;
+}
+
+
+/* 6. 详情页面样式 (view.jsp) */
 .detail-table {
     width: 100%;
-    margin-bottom: 20px;
-}
-.detail-table th {
-    width: 150px;
-    text-align: right;
-    padding-right: 20px;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-}
-.detail-table td {
-    border: 1px solid #dee2e6;
-    padding: 10px;
+    border-collapse: collapse;
+    margin-top: 1rem;
 }
 
-/* Dashboard Cards */
-.dashboard-cards {
-    display: flex;
-    gap: 30px;
-    margin-top: 30px;
+.detail-table th, .detail-table td {
+    padding: 1rem 1.2rem;
+    text-align: left;
+    border-bottom: 1px solid #f3f4f6; /* 极浅分隔线 */
 }
-.card {
-    flex: 1;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+.detail-table th {
+    width: 30%; /* 保证标签宽度一致 */
+    background-color: var(--light-bg); /* 标签列浅背景 */
+    color: var(--font-sub);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.9rem;
 }
-.card h3 {
-    margin-top: 0;
-    color: #007bff;
+
+.detail-table td {
+    color: var(--font-main);
+    font-weight: 400;
+    font-size: 1rem;
+}
+
+/* 7. 登录页面特定样式 */
+.login-container {
+    margin-top: 10vh; /* 居中效果 */
+    padding: 2.5rem;
+    text-align: center;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); /* 略重的阴影，突出核心 */
+}
+
+.login-container h2 {
+    color: var(--primary-blue);
+    margin-bottom: 2rem;
+    font-size: 1.5rem;
+}
+
+.login-container p {
+    color: var(--font-sub);
+    font-size: 0.9rem;
+    margin-top: 1rem;
+}
+
+.error-message {
+    color: var(--delete-red);
+    background-color: #fee2e2; /* Red 100 */
+    border: 1px solid var(--delete-red);
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+
+/* 8. 错误页面 (404) */
+.error-container {
+    text-align: center;
+    padding: 5rem 2rem;
+}
+
+.error-container h1 {
+    font-size: 3rem;
+    color: var(--delete-red);
+    border: none;
+}
+
+.error-container p {
+    font-size: 1.1rem;
+    color: var(--font-sub);
+    margin-bottom: 2rem;
 }

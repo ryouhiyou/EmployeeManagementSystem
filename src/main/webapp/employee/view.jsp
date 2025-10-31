@@ -6,6 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <title>查看员工信息</title>
+    <!-- 使用新的统一 CSS 路径 -->
     <link rel="stylesheet" href="<c:url value='/css/style.css'/>">
 </head>
 <body>
@@ -14,6 +15,7 @@
 <div class="content-container view-page">
     <h1>员工详细信息 - ${emp.name}</h1>
 
+    <!-- 详情表格使用 detail-table 样式 -->
     <table class="detail-table">
         <tr>
             <th>ID</th>
@@ -33,6 +35,7 @@
         </tr>
         <tr>
             <th>薪资</th>
+            <!-- 格式化薪资 -->
             <td><fmt:formatNumber value="${emp.salary}" type="currency" currencySymbol="¥" maxFractionDigits="2"/></td>
         </tr>
         <tr>

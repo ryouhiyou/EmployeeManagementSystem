@@ -5,12 +5,14 @@
 <head>
     <meta charset="UTF-8">
     <title>新增员工</title>
+    <!-- 使用新的统一 CSS 路径 -->
     <link rel="stylesheet" href="<c:url value='/css/style.css'/>">
 </head>
 <body>
 
 <div class="content-container form-page">
     <h1>新增员工信息</h1>
+    <!-- 表单使用 data-form 居中且约束宽度 -->
     <form action="<c:url value='/EmployeeServlet?action=insert'/>" method="post" class="data-form">
         <div class="form-group">
             <label for="name">姓名:</label>
@@ -26,6 +28,7 @@
         </div>
         <div class="form-group">
             <label for="salary">薪资 (¥):</label>
+            <!-- 统一使用 input[type=number] 的扁平化样式 -->
             <input type="number" id="salary" name="salary" step="0.01" required>
         </div>
         <div class="form-group">
@@ -38,11 +41,14 @@
         </div>
         <div class="form-group">
             <label for="hire_date">入职日期:</label>
+            <!-- 统一使用 input[type=date] 的扁平化样式 -->
             <input type="date" id="hire_date" name="hire_date" required>
         </div>
 
         <div class="form-actions">
+            <!-- 提交使用 btn-success 绿色 -->
             <button type="submit" class="btn-success">保存</button>
+            <!-- 返回使用 btn-secondary 灰色 -->
             <a href="<c:url value='/EmployeeServlet?action=list'/>" class="btn-secondary">返回列表</a>
         </div>
     </form>
