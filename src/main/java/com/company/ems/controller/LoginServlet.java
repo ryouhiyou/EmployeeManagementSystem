@@ -1,29 +1,26 @@
 package com.company.ems.controller;
 
-import com.company.ems.dao.UserDAO;
 import com.company.ems.model.User;
-import com.company.ems.util.MyBatisUtil; // Import MyBatis utility class
+import com.company.ems.util.MyBatisUtil;
+import com.company.ems.dto.UserDTO;
+import com.company.ems.mapper.UserMapper;
 
 import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet; // Import annotation
+import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
-import java.sql.SQLException;
 
-import org.apache.ibatis.session.SqlSession; // Import SqlSession
+import org.apache.ibatis.session.SqlSession;
 
-// Register and map using @WebServlet annotation
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    // The dependency on the UserDAO member variable and init() method has been removed
-
-    // Handle GET requests: display the login form (resolves 405 error)
+    // Handle GET requests: display the login form
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -39,50 +36,61 @@ public class LoginServlet extends HttpServlet {
         String username = request.getParameter("username");
         String password = request.getParameter("password");
 
-        User loggedInUser = null;
+        UserDTO loggedInUserDTO = null;
         String errorMessage = null;
 
-        // Use try-with-resources to ensure SqlSession is closed
         try (SqlSession session = MyBatisUtil.getSqlSessionFactory().openSession()) {
 
-            // Get UserDAO Mapper instance
-            UserDAO userDAO = session.getMapper(UserDAO.class);
+            UserMapper userMapper = session.getMapper(UserMapper.class);
 
             // 1. Find user by username
-            User user = userDAO.findByUsername(username);
+            User userEntity = userMapper.findByUsername(username);
 
-            if (user == null) {
+            if (userEntity == null) {
                 errorMessage = "用户名或密码错误。";
             }
             // 2. Validate password
-            else if (user.getPassword().equals(password)) {
-                loggedInUser = user;
-                // role check has been removed
+            else if (userEntity.getPassword().equals(password)) {
+
+                // 临时假设：你有一个名为 UserConverter 的工具类来处理转换
+                // ✅ 编译通过修改点：调用本地转换方法
+                loggedInUserDTO = convertUserEntityToDTO(userEntity);
+
             } else {
                 errorMessage = "用户名或密码错误。";
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-            errorMessage = "系统错误，登录失败：" + e.getMessage();
         } catch (Exception e) {
             e.printStackTrace();
             errorMessage = "系统错误，登录失败。";
         }
 
 
-        if (loggedInUser != null) {
+        if (loggedInUserDTO != null) {
             // Login successful
             HttpSession session = request.getSession();
-            session.setAttribute("user", loggedInUser);
+
+            // 🚀 重构点：将 DTO 存储到 Session 中
+            session.setAttribute("user", loggedInUserDTO);
             session.setMaxInactiveInterval(30 * 60);
 
-            // *** 重定向到 DashboardServlet 作为仪表盘/主页 ***
+            // 重定向到 DashboardServlet 作为仪表盘/主页
             response.sendRedirect(request.getContextPath() + "/DashboardServlet");
         } else {
             // Login failed, forward back to the login page with the error message
             request.setAttribute("error", errorMessage);
             request.getRequestDispatcher("/login.jsp").forward(request, response);
         }
+    }
+
+    // ⚠️ 临时的 DTO 转换方法，你需要将其移入一个独立的 Service 或 Util 类中
+    private UserDTO convertUserEntityToDTO(User userEntity) {
+        UserDTO dto = new UserDTO();
+        dto.setId(userEntity.getId());
+        dto.setUsername(userEntity.getUsername());
+        // ❌ 错误修复：移除对 userEntity.getFullName() 的调用
+        dto.setEmail(userEntity.getEmail());
+        // ⚠️ DTO 不应包含敏感密码，此处不设置
+        return dto;
     }
 }

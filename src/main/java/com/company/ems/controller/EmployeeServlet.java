@@ -1,359 +1,548 @@
 package com.company.ems.controller;
 
-import com.company.ems.dao.EmployeeDAO;
+import com.company.ems.dto.EmployeeDTO;
+import com.company.ems.dto.UserDTO; // 引入 UserDTO 以便从 Session 中获取用户 ID
 import com.company.ems.model.Employee;
+import com.company.ems.mapper.EmployeeMapper;
 import com.company.ems.util.MyBatisUtil;
-import jakarta.servlet.RequestDispatcher;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+
 import org.apache.ibatis.session.SqlSession;
-import org.apache.ibatis.session.TransactionIsolationLevel; // 引入隔离级别，以便更精确控制事务
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.text.DecimalFormat; // 引入 DecimalFormat
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.sql.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
-@WebServlet("/EmployeeServlet/*")
+
+@WebServlet("/EmployeeServlet")
 public class EmployeeServlet extends HttpServlet {
-    private static final int RECORDS_PER_PAGE = 10;
-    private EmployeeDAO employeeDAO;
 
-    public void init() {
-        // 保持 init 方法为空
+    private EmployeeMapper employeeMapperInstance;
+
+    @Override
+    public void init() throws ServletException {
+        // Servlet 初始化逻辑（如果需要连接池或其他初始化操作可以在此添加）
     }
 
-    protected void doPost(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        doGet(request, response);
-    }
-
-    protected void doGet(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 设置请求的字符编码
         request.setCharacterEncoding("UTF-8");
-        response.setCharacterEncoding("UTF-8");
 
         String action = request.getParameter("action");
         if (action == null) {
-            action = "list";
+            action = "list"; // 默认操作是列出员工
         }
 
         try {
             switch (action) {
-                case "new":
-                    showNewForm(request, response);
+                case "list":
+                    listEmployees(request, response);
                     break;
-                case "insert":
-                    insertEmployee(request, response);
-                    break;
-                case "delete":
-                    deleteEmployee(request, response);
-                    break;
-                case "edit":
-                    showEditForm(request, response);
-                    break;
-                case "update":
-                    updateEmployee(request, response);
+                case "add_form": // 处理显示新增员工表单的请求
+                    showAddForm(request, response);
                     break;
                 case "view":
                     viewEmployee(request, response);
                     break;
-                case "list":
-                default:
-                    listEmployee(request, response);
+                case "edit":
+                    showEditForm(request, response);
                     break;
+                case "delete":
+                    deleteEmployee(request, response);
+                    break;
+                default:
+                    listEmployees(request, response);
             }
-        } catch (Exception ex) {
-            throw new ServletException(ex);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // 统一错误处理
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "An internal server error occurred: " + e.getMessage());
         }
     }
 
-    // ---------------------- 核心业务方法 ----------------------
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 设置请求的字符编码
+        request.setCharacterEncoding("UTF-8");
+
+        String action = request.getParameter("action");
+        if (action == null) {
+            action = "insert"; // 默认 POST 操作是插入
+        }
+
+        try {
+            switch (action) {
+                case "insert":
+                    insertEmployee(request, response);
+                    break;
+                case "update":
+                    updateEmployee(request, response);
+                    break;
+                default:
+                    response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown action: " + action);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "An internal server error occurred: " + e.getMessage());
+        }
+    }
+
+    // --- Session 帮助方法 ---
 
     /**
-     * 查找、分页和排序功能的核心方法
+     * 统一的 Session 检查和用户ID提取方法
      */
-    private void listEmployee(HttpServletRequest request, HttpServletResponse response)
-            throws IOException, ServletException {
-
-        // 1. 获取分页、搜索和排序参数
-        int currentPage = 1;
-        if (request.getParameter("page") != null) {
-            try {
-                currentPage = Integer.parseInt(request.getParameter("page"));
-            } catch (NumberFormatException ignored) { }
+    private Integer getUserIdFromSession(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return null;
         }
 
-        String searchKeyword = request.getParameter("search");
-        if (searchKeyword == null) {
-            searchKeyword = "";
+        // 修正点：从 Session 中获取名为 "user" 的 DTO 对象，并提取其 ID
+        Object userObj = session.getAttribute("user");
+        if (userObj instanceof UserDTO) {
+            return ((UserDTO) userObj).getId();
+        }
+        return null;
+    }
+
+
+    // --- 核心业务方法 ---
+
+    /**
+     * 处理查看员工详细信息的请求，转发到 /employee/view.jsp
+     */
+    private void viewEmployee(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String idParam = request.getParameter("id");
+        if (idParam == null) {
+            // 如果缺少ID，默认返回列表页
+            listEmployees(request, response);
+            return;
         }
 
-        // 获取排序参数
+        try {
+            int employeeId = Integer.parseInt(idParam);
+
+            try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
+                employeeMapperInstance = sqlSession.getMapper(EmployeeMapper.class);
+
+                Employee employeeEntity = employeeMapperInstance.selectEmployeeById(employeeId);
+
+                if (employeeEntity == null) {
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "Employee not found with ID: " + employeeId);
+                    return;
+                }
+
+                EmployeeDTO employeeDTO = toDTO(employeeEntity);
+
+                // 将 DTO 放入 Request 作用域，供 view.jsp 使用
+                request.setAttribute("employeeDTO", employeeDTO);
+
+                // 转发到正确的 JSP 路径 /employee/view.jsp
+                request.getRequestDispatcher("/employee/view.jsp").forward(request, response);
+
+            }
+
+        } catch (NumberFormatException e) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid employee ID format");
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new ServletException("Database error in viewEmployee", e);
+        }
+    }
+
+    /**
+     * 显示新增员工表单，转发到 /employee/add.jsp
+     */
+    private void showAddForm(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 转发到位于 /webapp/employee/add.jsp 的页面
+        request.getRequestDispatcher("/employee/add.jsp").forward(request, response);
+    }
+
+    /**
+     * 处理分页、搜索和排序后的员工列表
+     */
+    private void listEmployees(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String search = request.getParameter("search");
         String sortBy = request.getParameter("sortBy");
         String sortOrder = request.getParameter("sortOrder");
+        int page = 1;
+        int limit = 10;
 
-        // 默认排序逻辑：如果未指定排序参数，则默认按 ID 升序排列
-        if (sortBy == null || sortBy.isEmpty()) {
-            sortBy = "id";
-            sortOrder = "ASC";
+        try {
+            String pageParam = request.getParameter("page");
+            if (pageParam != null) {
+                page = Integer.parseInt(pageParam);
+            }
+        } catch (NumberFormatException e) {
+            // 使用默认值 1
         }
 
-        // 安全检查：只能是 ASC 或 DESC
-        if (sortOrder == null || (!sortOrder.equalsIgnoreCase("ASC") && !sortOrder.equalsIgnoreCase("DESC"))) {
-            // 如果用户传入的 sortOrder 无效，则基于当前的 sortBy 默认给一个方向
-            sortOrder = "ASC";
-        }
+        // 防止 page < 1
+        if (page < 1) page = 1;
 
-        // 检查 sortBy 是否是有效字段，防止意外的 SQL 注入
-        if (!isValidSortColumn(sortBy)) {
-            sortBy = "id";
-            sortOrder = "ASC"; // 如果字段无效，重置为默认 ID 升序
-        }
+        int offset = (page - 1) * limit;
 
-
-        int offset = (currentPage - 1) * RECORDS_PER_PAGE;
-        int limit = RECORDS_PER_PAGE;
-
-        int totalRecords = 0;
-        List<Employee> listEmployee = null;
-
-        // 2. 使用 MyBatis 获取数据
         try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
-            employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
+            employeeMapperInstance = sqlSession.getMapper(EmployeeMapper.class);
 
-            totalRecords = employeeDAO.getTotalRecords(searchKeyword);
+            // 1. 获取总记录数
+            int totalRecords = employeeMapperInstance.getTotalRecords(search);
+            int totalPages = (int) Math.ceil((double) totalRecords / limit);
 
-            // 🚀 关键：传递全部 5 个参数 (offset, limit, search, sortBy, sortOrder)
-            listEmployee = employeeDAO.listAllEmployees(offset, limit, searchKeyword, sortBy, sortOrder);
+            // 如果计算出的 page 大于总页数，则跳回最后一页
+            if (page > totalPages && totalRecords > 0) {
+                page = totalPages;
+                offset = (page - 1) * limit;
+            } else if (totalRecords == 0) {
+                // 如果没有记录，页数应为 1
+                totalPages = 1;
+                page = 1;
+            }
+
+            // 2. 查询员工列表（返回 Entity）
+            List<Employee> employeeEntities = employeeMapperInstance.listAllEmployees(offset, limit, search, sortBy, sortOrder);
+
+            // 3. 将 Entity 列表转换为 DTO 列表
+            List<EmployeeDTO> employeeDTOs = toDTOList(employeeEntities);
+
+            request.setAttribute("employeeDTOs", employeeDTOs);
+            request.setAttribute("currentPage", page);
+            request.setAttribute("totalPages", totalPages);
+            request.setAttribute("totalRecords", totalRecords);
+            request.setAttribute("search", search);
+            request.setAttribute("sortBy", sortBy);
+            request.setAttribute("sortOrder", sortOrder);
+
+            // 转发到 /webapp/employee/list.jsp
+            request.getRequestDispatcher("/employee/list.jsp").forward(request, response);
 
         } catch (Exception e) {
-            e.printStackTrace();
-            // 重新包装异常，提供更清晰的日志信息
-            throw new ServletException("Error listing employees with MyBatis.", e);
+            // 数据库连接或 MyBatis 错误
+            throw new ServletException("Database access error in listEmployees", e);
         }
-
-        // 3. 计算分页信息并设置 Request 属性
-        int totalPages = (int) Math.ceil((double) totalRecords / RECORDS_PER_PAGE);
-
-        request.setAttribute("listEmployee", listEmployee);
-        request.setAttribute("currentPage", currentPage);
-        request.setAttribute("totalPages", totalPages);
-        request.setAttribute("totalRecords", totalRecords);
-        request.setAttribute("searchKeyword", searchKeyword);
-
-        // 新增：将当前的排序参数传回 JSP
-        request.setAttribute("sortBy", sortBy);
-        request.setAttribute("sortOrder", sortOrder);
-
-        RequestDispatcher dispatcher = request.getRequestDispatcher("/employee/list.jsp");
-        dispatcher.forward(request, response);
     }
 
     /**
-     * 安全检查：只允许特定的列名进行排序
+     * 插入新员工记录
      */
-    private boolean isValidSortColumn(String column) {
-        return column.equalsIgnoreCase("id") ||
-                column.equalsIgnoreCase("name") ||
-                column.equalsIgnoreCase("department") ||
-                column.equalsIgnoreCase("position") ||
-                column.equalsIgnoreCase("salary") ||
-                column.equalsIgnoreCase("hire_date");
-    }
+    private void insertEmployee(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+        // 1. 获取用户 ID
+        Integer userId = getUserIdFromSession(request);
 
-
-    // ---------------------- CRUD/辅助方法 ----------------------
-
-    private void showNewForm(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        RequestDispatcher dispatcher = request.getRequestDispatcher("/employee/add.jsp");
-        dispatcher.forward(request, response);
-    }
-
-    private void insertEmployee(HttpServletRequest request, HttpServletResponse response)
-            throws IOException {
-        // 提取数据时，extractEmployeeFromRequest 会确保 hireDate 不为 null
-        Employee newEmployee = extractEmployeeFromRequest(request);
-
-        // ⚠️ 事务修改：使用 try-with-resources 自动关闭 Session，并显式处理提交和回滚
-        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(TransactionIsolationLevel.READ_COMMITTED)) {
-            employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
-            employeeDAO.insertEmployee(newEmployee);
-            sqlSession.commit(); // 显式提交事务
-            System.out.println("DEBUG: Employee insertion committed successfully.");
-        } catch (Exception e) {
-            // 打印详细错误信息，帮助用户调试
-            System.err.println("FATAL ERROR: Failed to insert employee. Check database write permission or SQL syntax in Mapper XML.");
-            e.printStackTrace();
-            throw new RuntimeException("Employee insertion failed.", e); // 抛出异常，以便前端看到服务器错误
-        }
-        response.sendRedirect(request.getContextPath() + "/EmployeeServlet?message=add_success");
-    }
-
-    private void deleteEmployee(HttpServletRequest request, HttpServletResponse response)
-            throws IOException {
-        int id = Integer.parseInt(request.getParameter("id"));
-
-        // ⚠️ 事务修改：使用 try-with-resources 自动关闭 Session，并显式处理提交和回滚
-        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(TransactionIsolationLevel.READ_COMMITTED)) {
-            employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
-            employeeDAO.deleteEmployee(id);
-            sqlSession.commit(); // 显式提交事务
-            System.out.println("DEBUG: Employee deletion committed successfully for ID: " + id);
-        } catch (Exception e) {
-            // 打印详细错误信息，帮助用户调试
-            System.err.println("FATAL ERROR: Failed to delete employee. Check database write permission or SQL syntax in Mapper XML.");
-            e.printStackTrace();
-            throw new RuntimeException("Employee deletion failed.", e);
-        }
-        response.sendRedirect(request.getContextPath() + "/EmployeeServlet?message=delete_success");
-    }
-
-    private void showEditForm(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        int id = Integer.parseInt(request.getParameter("id"));
-        Employee existingEmployee = null;
-        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
-            employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
-            existingEmployee = employeeDAO.selectEmployeeById(id);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        request.setAttribute("employee", existingEmployee);
-        RequestDispatcher dispatcher = request.getRequestDispatcher("/employee/edit.jsp");
-        dispatcher.forward(request, response);
-    }
-
-    private void updateEmployee(HttpServletRequest request, HttpServletResponse response)
-            throws IOException {
-        // 1. 从请求中提取用户输入的新数据
-        Employee employee = extractEmployeeFromRequest(request);
-        int employeeId = Integer.parseInt(request.getParameter("id"));
-        employee.setId(employeeId);
-
-        // 2. 检查 hireDate 是否为 null (在 extractEmployeeFromRequest 中已修复，这里作为二次保险，但逻辑可以简化)
-        if (employee.getHireDate() == null) {
-            // 🐛 修复逻辑：如果用户未提供日期，或者日期解析失败（导致为 null），
-            // 则从数据库中查询原始的 hireDate 值，以避免 'hire_date cannot be null' 错误。
-            // 由于 extractEmployeeFromRequest 已经确保它不为 null，理论上此处不应该执行。
-            // 但为了兼容旧数据和更健壮的更新，保留查询逻辑（如果用户在 edit 表单中清空了日期）
-            try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
-                employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
-                Employee existingEmployee = employeeDAO.selectEmployeeById(employeeId);
-                if (existingEmployee != null) {
-                    // 使用数据库中的原始日期
-                    employee.setHireDate(existingEmployee.getHireDate());
-                    System.out.println("DEBUG: Hire date was null in request, restored original date from DB.");
-                } else {
-                    // 如果连旧记录都找不到，说明 ID 有问题，但这里保持原逻辑
-                    System.err.println("WARNING: Cannot find existing employee with ID: " + employeeId);
-                }
-            } catch (Exception e) {
-                System.err.println("WARNING: Failed to fetch existing employee for date restore.");
-                e.printStackTrace();
-            }
+        if (userId == null) {
+            // 用户未登录，重定向到登录页
+            response.sendRedirect(request.getContextPath() + "/login.jsp");
+            return;
         }
 
-        // 3. 执行更新操作
-        // ⚠️ 事务修改：使用 try-with-resources 自动关闭 Session，并显式处理提交和回滚
-        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(TransactionIsolationLevel.READ_COMMITTED)) {
-            employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
-            employeeDAO.updateEmployee(employee);
-            sqlSession.commit(); // 显式提交事务
-            System.out.println("DEBUG: Employee update committed successfully for ID: " + employee.getId());
-        } catch (Exception e) {
-            // 打印详细错误信息，帮助用户调试
-            System.err.println("FATAL ERROR: Failed to update employee. Check database write permission or SQL syntax in Mapper XML.");
-            e.printStackTrace();
-            throw new RuntimeException("Employee update failed.", e);
-        }
-        response.sendRedirect(request.getContextPath() + "/EmployeeServlet?message=update_success");
-    }
+        EmployeeDTO dto = extractEmployeeDTO(request);
 
-    private void viewEmployee(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        int id = Integer.parseInt(request.getParameter("id"));
-        Employee employee = null;
-        try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
-            employeeDAO = sqlSession.getMapper(EmployeeDAO.class);
-            employee = employeeDAO.selectEmployeeById(id);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        request.setAttribute("employee", employee);
-        RequestDispatcher dispatcher = request.getRequestDispatcher("/employee/view.jsp");
-        dispatcher.forward(request, response);
-    }
+        // 🌟 关键修正：在验证和转换之前，将创建人 ID 设置到 DTO 中
+        // 解决 "Cannot invoke "java.lang.Integer.intValue()" because the return value of "com.company.ems.dto.EmployeeDTO.getCreatedBy()" is null" 错误
+        dto.setCreatedBy(userId);
 
-    private Employee extractEmployeeFromRequest(HttpServletRequest request) {
-        String name = request.getParameter("name");
-        String department = request.getParameter("department");
-        String position = request.getParameter("position");
-
-        // 处理薪资
-        BigDecimal salary = BigDecimal.ZERO;
-        String salaryStr = request.getParameter("salary");
-
-        if (salaryStr != null && !salaryStr.trim().isEmpty()) {
-            try {
-                // 🚀 改进：尝试用 BigDecimal 构造函数直接解析，并去除所有非数字字符（但保留小数点）
-                // 这样可以处理像 "80.00" 这样的标准输入
-                salary = new BigDecimal(salaryStr.trim());
-            } catch (NumberFormatException e1) {
-                // 如果直接解析失败，可能是因为输入中包含格式化符号 (如逗号) 或其他非标准字符
-                try {
-                    // 尝试使用 DecimalFormat 来解析，它能处理更复杂的数字格式
-                    // 移除所有非数字和小数点的字符，只保留数字和小数点
-                    String cleanSalaryStr = salaryStr.replaceAll("[^0-9.]", "");
-
-                    if (!cleanSalaryStr.isEmpty()) {
-                        salary = new BigDecimal(cleanSalaryStr);
-                    } else {
-                        System.err.println("WARNING: Salary input '" + salaryStr + "' resulted in empty string after cleaning.");
-                    }
-                } catch (Exception e2) {
-                    // 再次解析失败，记录错误并回退到 0.00
-                    System.err.println("WARNING: Failed to parse salary string '" + salaryStr + "'. Setting to 0.00.");
-                    // 薪资保持为 BigDecimal.ZERO (初始化值)
-                }
-            }
+        // 2. 验证 DTO 数据
+        String errorMessage = validateEmployeeDTO(dto);
+        if (errorMessage != null) {
+            request.setAttribute("error", errorMessage);
+            request.setAttribute("employeeDTO", dto);
+            // 验证失败，返回新增表单并显示错误
+            request.getRequestDispatcher("/employee/add.jsp").forward(request, response);
+            return;
         }
 
-        // 处理入职日期
-        java.sql.Date sqlHireDate = null;
         try {
-            String dateString = request.getParameter("hireDate");
-            if (dateString != null && !dateString.isEmpty()) {
-                java.util.Date utilHireDate = new SimpleDateFormat("yyyy-MM-dd").parse(dateString);
-                sqlHireDate = new java.sql.Date(utilHireDate.getTime());
+            // 3. DTO 转换为 Entity
+            Employee newEmployeeEntity = toEntity(dto);
+            // newEmployeeEntity.setCreatedBy(userId); // 这一行现在不再需要，因为 ID 已在 DTO 转换时处理
+
+            // 4. 执行数据库插入
+            try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(true)) { // 自动提交
+                employeeMapperInstance = sqlSession.getMapper(EmployeeMapper.class);
+                employeeMapperInstance.insertEmployee(newEmployeeEntity);
+
+                // 插入成功后重定向到列表页
+                response.sendRedirect(request.getContextPath() + "/EmployeeServlet?action=list&message=add_success");
             }
-        } catch (ParseException e) {
-            // 解析失败，sqlHireDate 保持为 null
-            System.err.println("WARNING: Failed to parse hire date string: " + request.getParameter("hireDate"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            request.setAttribute("error", "Failed to insert employee: " + e.getMessage());
+            request.setAttribute("employeeDTO", dto);
+            // 数据库错误，返回新增表单
+            request.getRequestDispatcher("/employee/add.jsp").forward(request, response);
+        }
+    }
+
+    /**
+     * 更新员工记录
+     */
+    private void updateEmployee(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+        // 1. 获取用户 ID
+        Integer userId = getUserIdFromSession(request); // 确保用户已登录
+
+        if (userId == null) {
+            response.sendRedirect(request.getContextPath() + "/login.jsp");
+            return;
         }
 
-        // 🐛 修复：如果 sqlHireDate 仍然是 null (用户未提供或解析失败)，则使用当前日期
-        if (sqlHireDate == null) {
-            sqlHireDate = new java.sql.Date(System.currentTimeMillis());
-            System.out.println("DEBUG: Hire date not provided or invalid, defaulting to current system date.");
+        EmployeeDTO dto = extractEmployeeDTO(request);
+
+        // 🌟 关键修正：设置 CreatedBy (或者作为 UpdatedBy 的代理，避免 toEntity 报错)
+        // 解决 "Cannot invoke "java.lang.Integer.intValue()" because..." 错误
+        dto.setCreatedBy(userId);
+
+        // 2. 验证 DTO 数据
+        String errorMessage = validateEmployeeDTO(dto);
+        if (errorMessage != null) {
+            request.setAttribute("error", errorMessage);
+            request.setAttribute("employeeDTO", dto);
+            // 验证失败，返回编辑表单
+            request.getRequestDispatcher("/employee/edit.jsp").forward(request, response);
+            return;
         }
 
+        try {
+            // 3. DTO 转换为 Entity
+            Employee updatedEmployeeEntity = toEntity(dto);
 
-        Employee employee = new Employee();
-        employee.setName(name);
-        employee.setDepartment(department);
-        employee.setPosition(position);
-        employee.setSalary(salary); // 确保 salary 至少是 BigDecimal.ZERO
-        employee.setHireDate(sqlHireDate);
+            // 4. 执行数据库更新
+            try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(true)) { // 自动提交
+                employeeMapperInstance = sqlSession.getMapper(EmployeeMapper.class);
+                employeeMapperInstance.updateEmployee(updatedEmployeeEntity);
 
-        return employee;
+                // 更新成功后重定向到列表页
+                response.sendRedirect(request.getContextPath() + "/EmployeeServlet?action=list&message=update_success");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            request.setAttribute("error", "Failed to update employee: " + e.getMessage());
+            request.setAttribute("employeeDTO", dto);
+            // 数据库错误，返回编辑表单
+            request.getRequestDispatcher("/employee/edit.jsp").forward(request, response);
+        }
+    }
+
+    /**
+     * 删除员工记录
+     */
+    private void deleteEmployee(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String idParam = request.getParameter("id");
+        if (idParam == null) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing employee ID");
+            return;
+        }
+
+        try {
+            int employeeId = Integer.parseInt(idParam);
+            try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession(true)) { // 自动提交
+                employeeMapperInstance = sqlSession.getMapper(EmployeeMapper.class);
+                employeeMapperInstance.deleteEmployee(employeeId);
+            }
+        } catch (NumberFormatException e) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid employee ID format");
+            return;
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Failed to delete employee: " + e.getMessage());
+            return;
+        }
+
+        response.sendRedirect(request.getContextPath() + "/EmployeeServlet?action=list&message=delete_success");
+    }
+
+    /**
+     * 显示编辑员工表单，转发到 /employee/edit.jsp
+     */
+    private void showEditForm(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String idParam = request.getParameter("id");
+        if (idParam == null) {
+            listEmployees(request, response);
+            return;
+        }
+
+        try {
+            int employeeId = Integer.parseInt(idParam);
+
+            try (SqlSession sqlSession = MyBatisUtil.getSqlSessionFactory().openSession()) {
+                employeeMapperInstance = sqlSession.getMapper(EmployeeMapper.class);
+
+                Employee employeeEntity = employeeMapperInstance.selectEmployeeById(employeeId);
+
+                if (employeeEntity == null) {
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "Employee not found");
+                    return;
+                }
+
+                EmployeeDTO employeeDTO = toDTO(employeeEntity);
+
+                request.setAttribute("employeeDTO", employeeDTO);
+                // 转发到 /webapp/employee/edit.jsp
+                request.getRequestDispatcher("/employee/edit.jsp").forward(request, response);
+            }
+
+        } catch (NumberFormatException e) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid employee ID format");
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new ServletException("Database error in showEditForm", e);
+        }
+    }
+
+    /**
+     * 从请求中提取 DTO
+     */
+    private EmployeeDTO extractEmployeeDTO(HttpServletRequest request) {
+        EmployeeDTO dto = new EmployeeDTO();
+
+        String idParam = request.getParameter("id");
+        if (idParam != null && !idParam.isEmpty()) {
+            try {
+                dto.setId(Integer.parseInt(idParam));
+            } catch (NumberFormatException ignored) {
+                // 如果是新增操作，ID 为空是正常的
+            }
+        }
+
+        dto.setName(request.getParameter("name"));
+        dto.setDepartment(request.getParameter("department"));
+        dto.setPosition(request.getParameter("position"));
+
+        try {
+            String salaryStr = request.getParameter("salary");
+            if (salaryStr != null && !salaryStr.trim().isEmpty()) {
+                dto.setSalary(new BigDecimal(salaryStr));
+            }
+        } catch (NumberFormatException | NullPointerException ignored) {
+            // 忽略，留给 validateEmployeeDTO 检查
+        }
+
+        dto.setEmail(request.getParameter("email"));
+        dto.setPhone(request.getParameter("phone"));
+
+        // 日期处理：JSP 表单通常提交 String 格式的日期
+        String hireDateStr = request.getParameter("hireDate");
+        if (hireDateStr != null && !hireDateStr.isEmpty()) {
+            try {
+                // 简单的日期字符串解析
+                java.util.Date utilDate = java.sql.Date.valueOf(hireDateStr);
+                dto.setHireDate(utilDate);
+            } catch (IllegalArgumentException ignored) {
+                // 忽略，留给 validateEmployeeDTO 检查
+            }
+        }
+
+        return dto;
+    }
+
+    // ===============================================
+    // DTO 转换逻辑
+    // ===============================================
+
+    private EmployeeDTO toDTO(Employee entity) {
+        if (entity == null) {
+            return null;
+        }
+        EmployeeDTO dto = new EmployeeDTO();
+        dto.setId(entity.getId());
+        dto.setName(entity.getName());
+        dto.setDepartment(entity.getDepartment());
+        dto.setPosition(entity.getPosition());
+        dto.setSalary(entity.getSalary());
+        dto.setEmail(entity.getEmail());
+        dto.setPhone(entity.getPhone());
+
+        if (entity.getHireDate() != null) {
+            dto.setHireDate(new java.util.Date(entity.getHireDate().getTime()));
+        }
+
+        dto.setCreatedBy(entity.getCreatedBy());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setUpdatedAt(entity.getUpdatedAt());
+
+        return dto;
+    }
+
+    private Employee toEntity(EmployeeDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        Employee entity = new Employee();
+        if (dto.getId() != null) {
+            entity.setId(dto.getId());
+        }
+        entity.setName(dto.getName());
+        entity.setDepartment(dto.getDepartment());
+        entity.setPosition(dto.getPosition());
+        entity.setSalary(dto.getSalary());
+        entity.setEmail(dto.getEmail());
+        entity.setPhone(dto.getPhone());
+
+        if (dto.getHireDate() != null) {
+            // 将 java.util.Date 转换为 java.sql.Date
+            entity.setHireDate(new Date(dto.getHireDate().getTime()));
+        }
+
+        // 关键点：确保 dto.getCreatedBy() 不会为 null，因为我们已经在 insertEmployee 中设置了
+        entity.setCreatedBy(dto.getCreatedBy());
+        entity.setCreatedAt(dto.getCreatedAt());
+        entity.setUpdatedAt(dto.getUpdatedAt());
+
+        return entity;
+    }
+
+    private List<EmployeeDTO> toDTOList(List<Employee> entities) {
+        return entities.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+
+    // ===============================================
+    // 验证逻辑
+    // ===============================================
+
+    private String validateEmployeeDTO(EmployeeDTO dto) {
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            return "员工姓名不能为空。";
+        }
+        if (dto.getDepartment() == null || dto.getDepartment().trim().isEmpty()) {
+            return "部门不能为空。";
+        }
+        if (dto.getPosition() == null || dto.getPosition().trim().isEmpty()) {
+            return "职位不能为空。";
+        }
+        if (dto.getEmail() == null || dto.getEmail().trim().isEmpty()) {
+            return "电子邮件不能为空。";
+        }
+        // 简单的邮箱格式验证
+        if (!dto.getEmail().matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$")) {
+            return "电子邮件格式不正确。";
+        }
+
+        // 验证薪水：必须大于零
+        if (dto.getSalary() == null || dto.getSalary().compareTo(BigDecimal.ZERO) <= 0) {
+            return "薪水必须是大于零的有效数字。";
+        }
+
+        if (dto.getHireDate() == null) {
+            return "入职日期不能为空。";
+        }
+
+        // 手机号码验证（简单非空即可）
+        if (dto.getPhone() == null || dto.getPhone().trim().isEmpty()) {
+            return "电话号码不能为空。";
+        }
+
+        return null; // 验证通过
     }
 }
