@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 修正：namespace 必须与实际的 MyBatis Mapper 接口路径一致 -->
+<mapper namespace="com.company.ems.mapper.EmployeeMapper">
+
+    <!-- 员工结果集映射 -->
+    <resultMap id="EmployeeResultMap" type="com.company.ems.model.Employee">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="department" column="department"/>
+        <result property="position" column="position"/>
+        <result property="salary" column="salary"/>
+        <result property="hireDate" column="hire_date"/>
+        <!-- 【重要】如果您的 Employee Entity 包含 createdBy 字段，这里必须添加映射 -->
+        <result property="createdBy" column="created_by"/>
+    </resultMap>
+
+    <!-- 1. 获取总记录数 (支持多字段搜索) -->
+    <select id="getTotalRecords" resultType="int">
+        SELECT COUNT(*) FROM employees
+        <where>
+            <if test="search != null and search != ''">
+                <!-- 搜索所有相关字段：姓名、部门、职位 -->
+                (name LIKE CONCAT('%', #{search}, '%')
+                OR department LIKE CONCAT('%', #{search}, '%')
+                OR position LIKE CONCAT('%', #{search}, '%'))
+            </if>
+        </where>
+    </select>
+
+    <!-- 2. 分页查询员工列表 (支持搜索和排序) -->
+    <select id="listAllEmployees" resultMap="EmployeeResultMap">
+        SELECT * FROM employees
+        <where>
+            <if test="search != null and search != ''">
+                <!-- 搜索所有相关字段：姓名、部门、职位 -->
+                (name LIKE CONCAT('%', #{search}, '%')
+                OR department LIKE CONCAT('%', #{search}, '%')
+                OR position LIKE CONCAT('%', #{search}, '%'))
+            </if>
+        </where>
+        <!-- 动态排序子句。使用 ${} 传递列名和排序方向，因此必须在 Servlet 中进行安全检查 -->
+        <if test="sortBy != null and sortBy != '' and sortOrder != null and sortOrder != ''">
+            ORDER BY ${sortBy} ${sortOrder}
+        </if>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- CRUD 方法 -->
+
+    <insert id="insertEmployee" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO employees (name, department, position, salary, hire_date, created_by)
+        VALUES (#{name}, #{department}, #{position}, #{salary}, #{hireDate}, #{createdBy})
+    </insert>
+
+    <update id="updateEmployee">
+        UPDATE employees
+        SET name = #{name}, department = #{department}, position = #{position},
+            salary = #{salary}, hire_date = #{hireDate}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteEmployee">
+        DELETE FROM employees WHERE id = #{id}
+    </delete>
+
+    <select id="selectEmployeeById" resultMap="EmployeeResultMap">
+        SELECT * FROM employees WHERE id = #{id}
+    </select>
+</mapper>
